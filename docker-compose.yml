@@ -1,0 +1,28 @@
+version: '3.8'
+
+services:
+  postgres:
+    image: postgres:16-alpine
+    container_name: leanos-db
+    environment:
+      POSTGRES_USER: leanos_user
+      POSTGRES_PASSWORD: leanos_password
+      POSTGRES_DB: leanos
+    ports:
+      - "5432:5432"
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U leanos_user -d leanos"]
+      interval: 5s
+      timeout: 5s
+      retries: 5
+    networks:
+      - leanos-network
+
+volumes:
+  postgres_data:
+
+networks:
+  leanos-network:
+    driver: bridge
