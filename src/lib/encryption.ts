@@ -1,5 +1,29 @@
 import { createCipheriv, createDecipheriv, randomBytes } from "crypto";
 
+/**
+ * ⚠️ SECURITY ARCHITECTURE WARNING ⚠️
+ *
+ * This module uses AES-256-GCM to encrypt sensitive values (SMTP passwords,
+ * Stripe keys) before storing them in the database. However, the encryption
+ * key (ENCRYPTION_KEY) lives in the same environment (Vercel env vars) as
+ * the database connection string (DATABASE_URL).
+ *
+ * This means:
+ *   - Anyone with access to the Vercel dashboard has BOTH the key and the data.
+ *   - A single compromised env var / leaked .env.local file exposes everything.
+ *   - There is NO separation of concerns — the chest and the key are next
+ *     to each other.
+ *
+ * For a production SaaS handling real customer data and payment credentials,
+ * the encryption key should be stored in a dedicated Key Management Service
+ * (KMS) such as AWS KMS, Google Cloud KMS, or HashiCorp Vault — NOT in the
+ * same environment as the application.
+ *
+ * Using personal Gmail App Passwords as the SMTP credential makes this even
+ * worse: a breach of this app gives an attacker full access to the owner's
+ * personal Google account.
+ */
+
 const ALGORITHM = "aes-256-gcm";
 const IV_LENGTH = 16;
 const TAG_LENGTH = 16;

@@ -1,7 +1,8 @@
 import { NextResponse } from "next/server";
 import { db } from "@/lib/db";
-import { emailTemplates } from "@/lib/db/schema";
+import { emailTemplates, users } from "@/lib/db/schema";
 import { eq } from "drizzle-orm";
+import { auth } from "@/lib/auth";
 
 const templates = [
   {
@@ -85,6 +86,23 @@ const templates = [
 
 export async function POST() {
   try {
+    const session = await auth();
+
+    if (!session?.user?.id) {
+      return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+    }
+
+    const currentUser = await db
+      .select({ role: users.role })
+      .from(users)
+      .where(eq(users.id, session.user.id))
+      .limit(1)
+      .then((result: { role: "user" | "admin" }[]) => result[0]);
+
+    if (!currentUser || currentUser.role !== "admin") {
+      return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+    }
+
     let created = 0;
     let updated = 0;
 
