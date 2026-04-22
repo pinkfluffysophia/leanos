@@ -53,7 +53,32 @@ export default function EmailConfigPage() {
       .catch(() => setLoaded(true));
   }, [router]);
 
+  const [errors, setErrors] = useState<Record<string, string>>({});
+
+  const validate = (): boolean => {
+    const newErrors: Record<string, string> = {};
+    if (!config.smtpHost.trim()) {
+      newErrors.smtpHost = "SMTP Host is required (e.g., smtp.gmail.com)";
+    }
+    if (!config.smtpUser.trim()) {
+      newErrors.smtpUser = "SMTP Username is required";
+    }
+    if (!config.smtpFrom.trim()) {
+      newErrors.smtpFrom = "From Address is required";
+    }
+    if (!hasPassword && !config.smtpPassword.trim()) {
+      newErrors.smtpPassword = "SMTP Password is required";
+    }
+    setErrors(newErrors);
+    return Object.keys(newErrors).length === 0;
+  };
+
   const handleSave = async () => {
+    if (!validate()) {
+      toast.error("Please fill in all required fields");
+      return;
+    }
+
     setSaving(true);
     try {
       const payload = { ...config };
@@ -69,6 +94,7 @@ export default function EmailConfigPage() {
 
       if (response.ok) {
         toast.success("Email configuration saved");
+        setErrors({});
       } else {
         const data = await response.json();
         toast.error(data.error || "Failed to save configuration");
@@ -110,13 +136,22 @@ export default function EmailConfigPage() {
         <CardContent className="space-y-4">
           <div className="grid gap-4 sm:grid-cols-2">
             <div className="space-y-2">
-              <Label htmlFor="smtpHost">SMTP Host</Label>
+              <Label htmlFor="smtpHost">
+                SMTP Host <span className="text-red-500">*</span>
+              </Label>
               <Input
                 id="smtpHost"
                 value={config.smtpHost}
-                onChange={(e) => setConfig({ ...config, smtpHost: e.target.value })}
+                onChange={(e) => {
+                  setConfig({ ...config, smtpHost: e.target.value });
+                  if (errors.smtpHost) setErrors({ ...errors, smtpHost: "" });
+                }}
                 placeholder="smtp.gmail.com"
+                className={errors.smtpHost ? "border-red-500" : ""}
               />
+              {errors.smtpHost && (
+                <p className="text-xs text-red-500">{errors.smtpHost}</p>
+              )}
             </div>
             <div className="space-y-2">
               <Label htmlFor="smtpPort">SMTP Port</Label>
@@ -132,34 +167,61 @@ export default function EmailConfigPage() {
 
           <div className="grid gap-4 sm:grid-cols-2">
             <div className="space-y-2">
-              <Label htmlFor="smtpUser">SMTP Username</Label>
+              <Label htmlFor="smtpUser">
+                SMTP Username <span className="text-red-500">*</span>
+              </Label>
               <Input
                 id="smtpUser"
                 value={config.smtpUser}
-                onChange={(e) => setConfig({ ...config, smtpUser: e.target.value })}
+                onChange={(e) => {
+                  setConfig({ ...config, smtpUser: e.target.value });
+                  if (errors.smtpUser) setErrors({ ...errors, smtpUser: "" });
+                }}
                 placeholder="your@email.com"
+                className={errors.smtpUser ? "border-red-500" : ""}
               />
+              {errors.smtpUser && (
+                <p className="text-xs text-red-500">{errors.smtpUser}</p>
+              )}
             </div>
             <div className="space-y-2">
-              <Label htmlFor="smtpPassword">SMTP Password</Label>
+              <Label htmlFor="smtpPassword">
+                SMTP Password {!hasPassword && <span className="text-red-500">*</span>}
+              </Label>
               <Input
                 id="smtpPassword"
                 type="password"
                 value={config.smtpPassword}
-                onChange={(e) => setConfig({ ...config, smtpPassword: e.target.value })}
+                onChange={(e) => {
+                  setConfig({ ...config, smtpPassword: e.target.value });
+                  if (errors.smtpPassword) setErrors({ ...errors, smtpPassword: "" });
+                }}
                 placeholder={hasPassword ? "Password saved — leave blank to keep" : "App password or SMTP password"}
+                className={errors.smtpPassword ? "border-red-500" : ""}
               />
+              {errors.smtpPassword && (
+                <p className="text-xs text-red-500">{errors.smtpPassword}</p>
+              )}
             </div>
           </div>
 
           <div className="space-y-2">
-            <Label htmlFor="smtpFrom">From Address</Label>
+            <Label htmlFor="smtpFrom">
+              From Address <span className="text-red-500">*</span>
+            </Label>
             <Input
               id="smtpFrom"
               value={config.smtpFrom}
-              onChange={(e) => setConfig({ ...config, smtpFrom: e.target.value })}
+              onChange={(e) => {
+                setConfig({ ...config, smtpFrom: e.target.value });
+                if (errors.smtpFrom) setErrors({ ...errors, smtpFrom: "" });
+              }}
               placeholder="noreply@yourdomain.com"
+              className={errors.smtpFrom ? "border-red-500" : ""}
             />
+            {errors.smtpFrom && (
+              <p className="text-xs text-red-500">{errors.smtpFrom}</p>
+            )}
             <p className="text-xs text-muted-foreground">
               The email address that will appear as the sender
             </p>

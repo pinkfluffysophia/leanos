@@ -64,7 +64,7 @@ export default function ProductPage() {
             Sign In
           </button>
         </a>
-        <a href="/auth/signup" className="inline-block">
+        <a href="/signup" className="inline-block">
           <button className="w-full sm:w-auto px-8 py-3 sm:py-4 text-base sm:text-lg font-semibold border-2 border-pink-500 text-pink-500 hover:bg-pink-500/10 rounded-lg transition-all">
             Create Account
           </button>
