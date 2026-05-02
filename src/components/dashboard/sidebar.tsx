@@ -3,7 +3,7 @@
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { cn } from "@/lib/utils";
-import { LayoutDashboard, ShoppingBag, User, Settings, LogOut, X, Package } from "lucide-react";
+import { LayoutDashboard, ShoppingBag, User, Settings, LogOut, X, Package, FileDown } from "lucide-react";
 import { signOut } from "next-auth/react";
 import { Button } from "@/components/ui/button";
 
@@ -11,6 +11,7 @@ const navItems = [
   { href: "/dashboard", label: "Dashboard", icon: LayoutDashboard },
   { href: "/products", label: "Products", icon: Package },
   { href: "/purchases", label: "Purchases", icon: ShoppingBag },
+  { href: "/files", label: "Files", icon: FileDown },
   { href: "/profile", label: "Profile", icon: User },
   { href: "/settings", label: "Settings", icon: Settings },
 ];
@@ -36,13 +37,16 @@ export function Sidebar({ mobileOpen, onClose }: SidebarProps) {
       {/* Sidebar */}
       <aside
         className={cn(
-          "fixed inset-y-0 left-0 z-50 w-64 flex flex-col bg-white dark:bg-gray-900 border-r border-gray-200 dark:border-gray-800 transition-transform duration-200 ease-in-out",
+          "fixed inset-y-0 left-0 z-50 w-64 flex flex-col bg-white/70 dark:bg-pink-950/40 backdrop-blur-md border-r border-pink-100 dark:border-pink-300/10 transition-transform duration-200 ease-in-out",
           mobileOpen ? "translate-x-0" : "-translate-x-full",
           "md:translate-x-0"
         )}
       >
         <div className="flex items-center justify-between flex-shrink-0 h-16 px-4">
-          <Link href="/dashboard" className="text-xl font-bold text-gray-900 dark:text-white">
+          <Link
+            href="/dashboard"
+            className="text-xl font-light tracking-wide bg-gradient-to-r from-pink-400 to-rose-400 dark:from-pink-300 dark:to-rose-300 bg-clip-text text-transparent"
+          >
             LeanOS
           </Link>
           <Button
@@ -66,16 +70,16 @@ export function Sidebar({ mobileOpen, onClose }: SidebarProps) {
                   className={cn(
                     "group flex items-center px-3 py-2 text-sm font-medium rounded-md transition-colors",
                     isActive
-                      ? "bg-gray-100 dark:bg-gray-800 text-gray-900 dark:text-white"
-                      : "text-gray-600 dark:text-gray-400 hover:bg-gray-50 dark:hover:bg-gray-800 hover:text-gray-900 dark:hover:text-white"
+                      ? "bg-pink-100/80 dark:bg-pink-300/10 text-pink-600 dark:text-pink-200"
+                      : "text-slate-600 dark:text-slate-300 hover:bg-pink-50 dark:hover:bg-pink-300/5 hover:text-pink-600 dark:hover:text-pink-200"
                   )}
                 >
                   <item.icon
                     className={cn(
                       "mr-3 h-5 w-5 flex-shrink-0",
                       isActive
-                        ? "text-gray-900 dark:text-white"
-                        : "text-gray-400 group-hover:text-gray-500 dark:group-hover:text-gray-300"
+                        ? "text-pink-500 dark:text-pink-200"
+                        : "text-slate-400 group-hover:text-pink-500 dark:group-hover:text-pink-200"
                     )}
                   />
                   {item.label}

@@ -40,6 +40,7 @@ import {
 } from "lucide-react";
 import { toast } from "sonner";
 import { SessionGuard } from "@/components/shared/session-guard";
+import { ProductFilesSection } from "@/components/admin/product-files-section";
 
 interface Price {
   id: string;
@@ -502,6 +503,9 @@ export default function AdminProductDetailPage() {
           </div>
         </CardContent>
       </Card>
+
+      {/* Files */}
+      <ProductFilesSection productId={product.id} />
 
       {/* Info Footer */}
       <Card className="mb-6">

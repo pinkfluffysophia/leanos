@@ -223,6 +223,44 @@ export const passwordResetTokens = pgTable("password_reset_tokens", {
   createdAt: timestamp("created_at", { withTimezone: true }).defaultNow().notNull(),
 });
 
+// Files Table — uploaded digital goods
+export const files = pgTable("files", {
+  id: uuid("id").primaryKey().defaultRandom(),
+  name: varchar("name", { length: 255 }).notNull(),
+  fileName: varchar("file_name", { length: 255 }).notNull(),
+  blobUrl: text("blob_url").notNull(),
+  fileSize: integer("file_size").notNull(),
+  mimeType: varchar("mime_type", { length: 100 }).notNull(),
+  uploadedById: uuid("uploaded_by_id").references(() => users.id, { onDelete: "set null" }),
+  deletedAt: timestamp("deleted_at", { withTimezone: true }),
+  createdAt: timestamp("created_at", { withTimezone: true }).defaultNow().notNull(),
+});
+
+// Product Files Junction Table (many-to-many)
+export const productFiles = pgTable(
+  "product_files",
+  {
+    id: uuid("id").primaryKey().defaultRandom(),
+    productId: uuid("product_id").notNull().references(() => products.id, { onDelete: "cascade" }),
+    fileId: uuid("file_id").notNull().references(() => files.id, { onDelete: "cascade" }),
+    createdAt: timestamp("created_at", { withTimezone: true }).defaultNow().notNull(),
+  },
+  (table) => [uniqueIndex("product_files_unique").on(table.productId, table.fileId)],
+);
+
+// Download Links Table — one row per (purchase, file)
+export const downloadLinks = pgTable("download_links", {
+  id: uuid("id").primaryKey().defaultRandom(),
+  token: varchar("token", { length: 128 }).notNull().unique(),
+  userId: uuid("user_id").notNull().references(() => users.id, { onDelete: "cascade" }),
+  purchaseId: uuid("purchase_id").notNull().references(() => purchases.id, { onDelete: "cascade" }),
+  fileId: uuid("file_id").notNull().references(() => files.id, { onDelete: "restrict" }),
+  downloadCount: integer("download_count").default(0).notNull(),
+  maxDownloads: integer("max_downloads").default(3).notNull(),
+  lastDownloadedAt: timestamp("last_downloaded_at", { withTimezone: true }),
+  createdAt: timestamp("created_at", { withTimezone: true }).defaultNow().notNull(),
+});
+
 // Relations
 export const usersRelations = relations(users, ({ many, one }) => ({
   purchases: many(purchases),
@@ -239,6 +277,7 @@ export const usersRelations = relations(users, ({ many, one }) => ({
 export const productsRelations = relations(products, ({ many }) => ({
   purchases: many(purchases),
   prices: many(prices),
+  productFiles: many(productFiles),
 }));
 
 export const pricesRelations = relations(prices, ({ one }) => ({
@@ -321,5 +360,40 @@ export const waitlistMembersRelations = relations(waitlistMembers, ({ one }) => 
   waitlist: one(waitlists, {
     fields: [waitlistMembers.waitlistId],
     references: [waitlists.id],
+  }),
+}));
+
+export const filesRelations = relations(files, ({ one, many }) => ({
+  uploadedBy: one(users, {
+    fields: [files.uploadedById],
+    references: [users.id],
+  }),
+  productFiles: many(productFiles),
+  downloadLinks: many(downloadLinks),
+}));
+
+export const productFilesRelations = relations(productFiles, ({ one }) => ({
+  product: one(products, {
+    fields: [productFiles.productId],
+    references: [products.id],
+  }),
+  file: one(files, {
+    fields: [productFiles.fileId],
+    references: [files.id],
+  }),
+}));
+
+export const downloadLinksRelations = relations(downloadLinks, ({ one }) => ({
+  user: one(users, {
+    fields: [downloadLinks.userId],
+    references: [users.id],
+  }),
+  purchase: one(purchases, {
+    fields: [downloadLinks.purchaseId],
+    references: [purchases.id],
+  }),
+  file: one(files, {
+    fields: [downloadLinks.fileId],
+    references: [files.id],
   }),
 }));

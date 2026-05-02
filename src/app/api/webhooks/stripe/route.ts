@@ -3,10 +3,14 @@ import Stripe from "stripe";
 import { hash } from "bcryptjs";
 import { randomBytes } from "crypto";
 import { db } from "@/lib/db";
-import { purchases, transactions, stripeConfig, users, products } from "@/lib/db/schema";
+import { purchases, transactions, stripeConfig, users, products, emailLogs } from "@/lib/db/schema";
 import { decrypt } from "@/lib/encryption";
 import { eq } from "drizzle-orm";
 import { getTemplateByType, applyTemplateVariables, sendEmail } from "@/lib/email";
+import {
+  createDownloadLinksForPurchase,
+  sendFileDeliveryEmail,
+} from "@/lib/file-delivery";
 
 export async function POST(request: Request) {
   try {
@@ -247,54 +251,142 @@ async function handleCheckoutCompleted(session: Stripe.Checkout.Session) {
     }
   }
 
-  // Send purchase confirmation email
+  if (!user?.email) {
+    console.warn(`[purchase-emails] Skipped: user ${userId} has no email`);
+    return;
+  }
+  const userEmail = user.email;
+  const userFirstName = user.firstName;
+  const userLastName = user.lastName;
+
+  // Generate download links first (DB-only, ~100ms) so the file-delivery email
+  // has its URLs. Failure here is logged but does not block the confirmation email.
+  let links: Awaited<ReturnType<typeof createDownloadLinksForPurchase>> = [];
   try {
+    links = await createDownloadLinksForPurchase({
+      userId,
+      purchaseId: purchase.id,
+      productId,
+      baseUrl,
+    });
+    console.log(
+      `[file-delivery] Created ${links.length} download link(s) for purchase ${purchase.id}`
+    );
+  } catch (linkErr) {
+    console.error(
+      `[file-delivery] Failed to create download links for purchase ${purchase.id}:`,
+      linkErr
+    );
+  }
+
+  // Fire purchase confirmation + file delivery in PARALLEL. Sequential SMTP
+  // takes ~10-15s and exceeds Vercel Hobby's 10s function cap; running them
+  // concurrently halves wall-clock so both reliably complete within the limit.
+  const sendConfirmation = async () => {
     const template = await getTemplateByType("purchase_confirmation");
-    if (template && user?.email) {
-      const formattedAmount = new Intl.NumberFormat("en-US", {
-        style: "currency",
-        currency: currency || "USD",
-      }).format(amountTotal / 100);
+    if (!template) return;
 
-      const fullName = `${user.firstName || ""} ${user.lastName || ""}`.trim();
-      const html = applyTemplateVariables(template.bodyHtml, {
-        name: fullName,
-        firstName: user.firstName || "",
-        lastName: user.lastName || "",
-        fullName,
-        orderId: purchase.id,
-        productName: product?.name || "Unknown product",
-        amount: formattedAmount,
-        total: formattedAmount,
-        currency: currency,
-        date: new Date().toLocaleDateString("en-GB", {
-          day: "numeric",
-          month: "long",
-          year: "numeric",
-        }),
-        purchasesUrl: `${baseUrl}/purchases`,
-        year: new Date().getFullYear().toString(),
-      });
+    const formattedAmount = new Intl.NumberFormat("en-US", {
+      style: "currency",
+      currency: currency || "USD",
+    }).format(amountTotal / 100);
+    const fullName = `${userFirstName || ""} ${userLastName || ""}`.trim();
 
-      const subject = applyTemplateVariables(template.subject, {
-        name: fullName,
-        firstName: user.firstName || "",
-        productName: product?.name || "Unknown product",
-        amount: formattedAmount,
-      });
+    const html = applyTemplateVariables(template.bodyHtml, {
+      name: fullName,
+      firstName: userFirstName || "",
+      lastName: userLastName || "",
+      fullName,
+      orderId: purchase.id,
+      productName: product?.name || "Unknown product",
+      amount: formattedAmount,
+      total: formattedAmount,
+      currency,
+      date: new Date().toLocaleDateString("en-GB", {
+        day: "numeric",
+        month: "long",
+        year: "numeric",
+      }),
+      purchasesUrl: `${baseUrl}/purchases`,
+      year: new Date().getFullYear().toString(),
+    });
+    const subject = applyTemplateVariables(template.subject, {
+      name: fullName,
+      firstName: userFirstName || "",
+      productName: product?.name || "Unknown product",
+      amount: formattedAmount,
+    });
 
-      await sendEmail({
-        to: user.email,
-        subject,
-        html,
-        userId,
-        templateId: template.id,
-        templateName: template.name,
-      });
+    await sendEmail({
+      to: userEmail,
+      subject,
+      html,
+      userId,
+      templateId: template.id,
+      templateName: template.name,
+    });
+  };
 
-      console.log(`Purchase email sent to ${user.email}`);
+  const sendDelivery = async () => {
+    if (links.length === 0) {
+      console.warn(
+        `[file-delivery] No files attached to product ${productId} - skipping email`
+      );
+      return;
     }
-  } catch (emailError) {
-    console.error("Failed to send purchase email:", emailError);
+    await sendFileDeliveryEmail({
+      toEmail: userEmail,
+      userId,
+      firstName: userFirstName,
+      lastName: userLastName,
+      productName: product?.name || "your product",
+      links,
+      baseUrl,
+    });
+  };
+
+  console.log(`[purchase-emails] Sending confirmation + delivery in parallel for purchase ${purchase.id}`);
+  const [confirmRes, deliveryRes] = await Promise.allSettled([
+    sendConfirmation(),
+    sendDelivery(),
+  ]);
+
+  if (confirmRes.status === "fulfilled") {
+    console.log(`[purchase-confirmation] Sent to ${userEmail}`);
+  } else {
+    console.error(
+      `[purchase-confirmation] Failed for purchase ${purchase.id}:`,
+      confirmRes.reason
+    );
+  }
+
+  if (deliveryRes.status === "fulfilled") {
+    if (links.length > 0) {
+      console.log(
+        `[file-delivery] Sent to ${userEmail} (${links.length} link${links.length === 1 ? "" : "s"})`
+      );
+    }
+  } else {
+    const errMsg =
+      deliveryRes.reason instanceof Error
+        ? `${deliveryRes.reason.message}\n${deliveryRes.reason.stack || ""}`
+        : String(deliveryRes.reason);
+    console.error(
+      `[file-delivery] Failed for purchase ${purchase.id}:`,
+      deliveryRes.reason
+    );
+    await db
+      .insert(emailLogs)
+      .values({
+        toEmail: userEmail,
+        subject: `File delivery failed (purchase ${purchase.id})`,
+        status: "failed",
+        userId,
+        templateName: "File Delivery",
+        errorMessage: errMsg,
+      })
+      .catch((logErr) => {
+        console.error("[file-delivery] Failed to log delivery failure:", logErr);
+      });
   }
 }

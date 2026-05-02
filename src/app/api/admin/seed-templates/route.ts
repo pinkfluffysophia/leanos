@@ -3,6 +3,7 @@ import { db } from "@/lib/db";
 import { emailTemplates, users } from "@/lib/db/schema";
 import { eq } from "drizzle-orm";
 import { auth } from "@/lib/auth";
+import { FILE_DELIVERY_TEMPLATE } from "@/lib/file-delivery";
 
 const templates = [
   {
@@ -82,6 +83,7 @@ const templates = [
 </html>`,
     bodyText: `Hi {{firstName}},\n\nGreat news! {{referredName}} joined using your referral code.\n\nYou earned: {{rewardAmount}}\n\nView your referrals: {{referralUrl}}\n\n© {{year}} Leaniverse`,
   },
+  FILE_DELIVERY_TEMPLATE,
 ];
 
 export async function POST() {
